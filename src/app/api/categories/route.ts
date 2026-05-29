@@ -6,13 +6,13 @@ import type { Category } from "@/types/domain";
 import { slugify } from "@/lib/utils";
 
 export async function GET() {
-  if (!isSupabaseConfigured()) return NextResponse.json({ categories: DEFAULT_CATEGORIES, warning: "Supabase is not configured." });
+  if (!isSupabaseConfigured()) return NextResponse.json({ categories: DEFAULT_CATEGORIES, warning: "Supabase env is missing. Add the project URL and anon key in Vercel." });
   const categories = await listCategories();
   return NextResponse.json({ categories });
 }
 
 export async function POST(request: Request) {
-  if (!isSupabaseConfigured()) return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+  if (!isSupabaseConfigured()) return NextResponse.json({ error: "Supabase env is missing. Add the project URL and anon key in Vercel." }, { status: 503 });
   const input = categorySchema.parse(await request.json());
   const now = new Date().toISOString();
   const category: Category = {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!isSupabaseConfigured()) return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+  if (!isSupabaseConfigured()) return NextResponse.json({ error: "Supabase env is missing. Add the project URL and anon key in Vercel." }, { status: 503 });
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing category id." }, { status: 400 });
   await deleteCategory(id);

@@ -41,7 +41,10 @@ alter table public.preferences enable row level security;
 drop policy if exists "No direct anon expense access" on public.expenses;
 drop policy if exists "No direct anon category access" on public.categories;
 drop policy if exists "No direct anon preference access" on public.preferences;
+drop policy if exists "Open personal expense access" on public.expenses;
+drop policy if exists "Open personal category access" on public.categories;
+drop policy if exists "Open personal preference access" on public.preferences;
 
-create policy "No direct anon expense access" on public.expenses for all using (false);
-create policy "No direct anon category access" on public.categories for all using (false);
-create policy "No direct anon preference access" on public.preferences for all using (false);
+create policy "Open personal expense access" on public.expenses for all to anon using (true) with check (true);
+create policy "Open personal category access" on public.categories for all to anon using (true) with check (true);
+create policy "Open personal preference access" on public.preferences for all to anon using (true) with check (true);

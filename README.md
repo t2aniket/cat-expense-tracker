@@ -1,6 +1,6 @@
 # Cat Expense Tracker
 
-A production-ready mobile-first Next.js PWA for quickly tracking personal cat expenses with Supabase-backed persistence, analytics, reports, calendar views, import/export, dark mode, and offline app-shell support.
+A production-ready mobile-first Next.js PWA for quickly tracking personal cat expenses with Supabase-backed persistence, analytics, reports, calendar views, import/export, dark mode, and offline app-shell support. It is intentionally no-login and uses a personal open Supabase anon setup.
 
 ## Stack
 

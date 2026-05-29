@@ -6,12 +6,12 @@ Create `.env.local` locally and add the same values in Vercel:
 
 ```bash
 SUPABASE_URL="https://your-project.supabase.co"
-SUPABASE_SERVICE_ROLE_KEY="your-server-only-service-role-key"
+SUPABASE_ANON_KEY="your-supabase-anon-key"
 CAT_APP_INSTANCE_ID="personal-cat-expenses"
 NEXT_PUBLIC_APP_NAME="Cat Expense Tracker"
 ```
 
-Use Node 22 on Vercel. The Supabase service role key is used only inside Next.js route handlers and is never shipped to the browser.
+Use Node 22 on Vercel. This project is configured for a no-login personal app using Supabase anon access through Next.js route handlers.
 
 ## Supabase
 
@@ -19,9 +19,9 @@ Use Node 22 on Vercel. The Supabase service role key is used only inside Next.js
 2. Open SQL Editor.
 3. Run `supabase/schema.sql`.
 4. Copy Project URL into `SUPABASE_URL`.
-5. Copy the service role key into `SUPABASE_SERVICE_ROLE_KEY`.
+5. Copy the anon public key into `SUPABASE_ANON_KEY`.
 
-RLS is enabled and direct anonymous table access is denied. The app writes through server routes.
+RLS is enabled with open anon policies because this is a personal no-auth app. Anyone who has the deployed app URL can technically call the same API routes, so keep the URL private if you want it to remain personal.
 
 ## GitHub and Vercel
 
