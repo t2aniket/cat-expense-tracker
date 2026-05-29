@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 192 192" role="img" aria-label="Cat Expense Tracker icon">
+  <rect width="192" height="192" rx="44" fill="#0f766e"/>
+  <path d="M52 82 66 48l22 23h16l22-23 14 34c15 12 22 28 22 48 0 32-25 48-66 48s-66-16-66-48c0-20 7-36 22-48Z" fill="#fff8ed"/>
+  <circle cx="74" cy="113" r="7" fill="#171717"/>
+  <circle cx="118" cy="113" r="7" fill="#171717"/>
+  <path d="M91 129h10l-5 7-5-7Z" fill="#171717"/>
+  <path d="M78 144c10 9 26 9 36 0" fill="none" stroke="#171717" stroke-width="7" stroke-linecap="round"/>
+  <path d="M59 95c-13-1-24-5-32-11M61 114c-14 1-26-1-37-6M63 133c-12 5-23 9-34 11M133 95c13-1 24-5 32-11M131 114c14 1 26-1 37-6M129 133c12 5 23 9 34 11" stroke="#fff8ed" stroke-width="6" stroke-linecap="round"/>
+</svg>

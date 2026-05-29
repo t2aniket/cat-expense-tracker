@@ -1,0 +1,108 @@
+"use client";
+
+import { Upload, Download, RotateCcw, Trash2 } from "lucide-react";
+import { ChangeEvent, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Select } from "@/components/ui/select";
+import { CATEGORY_COLORS } from "@/constants/categories";
+import { expensesToCsv, parseExpenseCsv } from "@/services/api-client";
+import { downloadFile } from "@/lib/utils";
+import { useCatStore } from "@/store/use-cat-store";
+
+export default function SettingsPage() {
+  const expenses = useCatStore((state) => state.expenses);
+  const categories = useCatStore((state) => state.categories);
+  const preferences = useCatStore((state) => state.preferences);
+  const setPreferences = useCatStore((state) => state.setPreferences);
+  const addCategory = useCatStore((state) => state.addCategory);
+  const removeCategory = useCatStore((state) => state.removeCategory);
+  const importExpenses = useCatStore((state) => state.importExpenses);
+  const resetAll = useCatStore((state) => state.resetAll);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryColor, setCategoryColor] = useState(CATEGORY_COLORS[0]);
+
+  function exportJson() {
+    downloadFile(`cat-expense-backup-${Date.now()}.json`, JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), expenses, categories, preferences }, null, 2), "application/json");
+  }
+
+  function exportCsv() {
+    downloadFile(`cat-expenses-${Date.now()}.csv`, expensesToCsv(expenses), "text/csv");
+  }
+
+  async function importFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const imported = file.name.endsWith(".csv") ? parseExpenseCsv(text) : JSON.parse(text).expenses;
+    await importExpenses(imported);
+    toast.success(`${imported.length} expenses imported`);
+    event.target.value = "";
+  }
+
+  async function onAddCategory() {
+    if (!categoryName.trim()) return;
+    await addCategory({ name: categoryName.trim(), color: categoryColor, icon: "Tag", isFavorite: false });
+    setCategoryName("");
+  }
+
+  return (
+    <div className="grid gap-5">
+      <header className="pr-12">
+        <h1 className="text-4xl font-bold tracking-normal">Settings</h1>
+        <p className="mt-2 text-[var(--muted)]">Theme, budget, categories, backup, restore, and data tools.</p>
+      </header>
+
+      <Card className="grid gap-4">
+        <Select label="Theme" value={preferences.theme} onChange={(event) => setPreferences({ theme: event.target.value as typeof preferences.theme })}>
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </Select>
+        <Field label="Monthly Budget" inputMode="decimal" type="number" value={preferences.budgetMonthly} onChange={(event) => setPreferences({ budgetMonthly: Number(event.target.value) })} />
+        <Field label="Budget Alert Percent" inputMode="numeric" type="number" value={preferences.budgetAlertPercent} onChange={(event) => setPreferences({ budgetAlertPercent: Number(event.target.value) })} />
+      </Card>
+
+      <Card className="grid gap-4">
+        <h2 className="text-xl font-bold">Manage Categories</h2>
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <Field label="New Category" value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Insurance" />
+          <label className="grid gap-2 text-sm font-medium text-[var(--muted)]">
+            Color
+            <input aria-label="Category color" type="color" value={categoryColor} onChange={(event) => setCategoryColor(event.target.value)} className="h-12 w-14 rounded-2xl border border-[var(--border)] bg-transparent" />
+          </label>
+        </div>
+        <Button type="button" onClick={onAddCategory}>Add Category</Button>
+        <div className="grid gap-2">
+          {categories.map((category) => (
+            <div key={category.id} className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-black/5 px-3 dark:bg-white/10">
+              <span className="flex items-center gap-2 font-semibold"><span className="h-3 w-3 rounded-full" style={{ background: category.color }} />{category.name}</span>
+              <Button type="button" size="icon" variant="ghost" disabled={category.isDefault} onClick={() => void removeCategory(category.id)} aria-label={`Delete ${category.name}`}>
+                <Trash2 size={17} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="grid gap-3">
+        <h2 className="text-xl font-bold">Data Management</h2>
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" variant="secondary" onClick={exportCsv}><Download size={18} />CSV</Button>
+          <Button type="button" variant="secondary" onClick={exportJson}><Download size={18} />JSON</Button>
+        </div>
+        <label className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-black/5 px-4 font-bold dark:bg-white/10">
+          <Upload size={18} />
+          Import / Restore
+          <input type="file" accept=".csv,.json,application/json,text/csv" className="sr-only" onChange={importFile} />
+        </label>
+        <Button type="button" variant="danger" onClick={() => { if (window.confirm("Reset local cached data and preferences? Supabase rows are not deleted.")) resetAll(); }}>
+          <RotateCcw size={18} />
+          Reset Local Data
+        </Button>
+      </Card>
+    </div>
+  );
+}
