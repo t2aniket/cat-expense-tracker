@@ -2,32 +2,35 @@
 
 ## Environment Variables
 
-Create `.env.local` locally and add the same values in Vercel:
+For Vercel deployment, use Vercel Storage. You do not need Supabase or a manual SQL setup.
+
+Vercel/Neon will automatically add a Postgres connection variable such as `POSTGRES_URL` or `DATABASE_URL`. The app uses either one.
+
+Optional local `.env.local`:
 
 ```bash
-SUPABASE_URL="https://your-project.supabase.co"
-SUPABASE_ANON_KEY="your-supabase-anon-key"
+POSTGRES_URL="postgres://user:password@host/database?sslmode=require"
 CAT_APP_INSTANCE_ID="personal-cat-expenses"
 NEXT_PUBLIC_APP_NAME="Cat Expense Tracker"
 ```
 
-Use Node 22 on Vercel. This project is configured for a no-login personal app using Supabase anon access through Next.js route handlers.
+Use Node 22 on Vercel. This project is configured for a no-login personal app using server-side Next.js route handlers and Postgres.
 
-## Supabase
+## Vercel Database
 
-1. Create a free Supabase project.
-2. Open SQL Editor.
-3. Run `supabase/schema.sql`.
-4. Copy Project URL into `SUPABASE_URL`.
-5. Copy the anon public key into `SUPABASE_ANON_KEY`.
+1. Open the Vercel project.
+2. Go to Storage or Marketplace.
+3. Create or connect a Postgres database, usually Neon Postgres.
+4. Connect it to this project.
+5. Redeploy.
 
-RLS is enabled with open anon policies because this is a personal no-auth app. Anyone who has the deployed app URL can technically call the same API routes, so keep the URL private if you want it to remain personal.
+The app creates its own tables automatically on first API request.
 
 ## GitHub and Vercel
 
 1. Push this repository to GitHub.
 2. Import the repository in Vercel.
-3. Set the environment variables above.
+3. Connect Vercel Postgres/Neon storage.
 4. Set Node.js Version to 22.x.
 5. Deploy.
 
