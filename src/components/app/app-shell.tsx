@@ -20,11 +20,26 @@ const nav = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const hydrate = useCatStore((state) => state.hydrate);
+  const sync = useCatStore((state) => state.sync);
   const theme = useCatStore((state) => state.preferences.theme);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible") void sync();
+    };
+    const interval = window.setInterval(syncWhenVisible, 7000);
+    window.addEventListener("focus", syncWhenVisible);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncWhenVisible);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, [sync]);
 
   useEffect(() => {
     const root = document.documentElement;

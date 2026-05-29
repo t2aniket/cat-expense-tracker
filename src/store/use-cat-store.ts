@@ -15,6 +15,7 @@ type State = {
   isSyncing: boolean;
   error: string | null;
   hydrate: () => Promise<void>;
+  sync: () => Promise<void>;
   addExpense: (expense: Omit<Expense, "id" | "createdAt" | "updatedAt">) => Promise<Expense>;
   updateExpense: (expense: Expense) => Promise<Expense>;
   removeExpense: (id: string) => Promise<Expense | undefined>;
@@ -48,6 +49,11 @@ export const useCatStore = create<State>()(
       error: null,
       async hydrate() {
         set({ expenses: cache.getExpenses(), categories: cache.getCategories(), preferences: cache.getPreferences(), isSyncing: true });
+        await get().sync();
+      },
+      async sync() {
+        if (get().isSyncing && get().isReady) return;
+        set({ isSyncing: true });
         try {
           const [expenses, categories] = await Promise.all([api.listExpenses(), api.listCategories()]);
           cache.setExpenses(expenses);
@@ -67,6 +73,7 @@ export const useCatStore = create<State>()(
           const saved = await api.saveExpense(optimistic);
           set((state) => ({ expenses: sortExpenses(state.expenses.map((expense) => (expense.id === optimistic.id ? saved : expense))), error: null }));
           cache.setExpenses(get().expenses);
+          void get().sync();
           return saved;
         } catch (error) {
           const message = error instanceof Error ? error.message : "Supabase sync failed.";
@@ -83,6 +90,7 @@ export const useCatStore = create<State>()(
         try {
           const saved = await api.saveExpense(updated);
           set((state) => ({ expenses: sortExpenses(state.expenses.map((item) => (item.id === saved.id ? saved : item))), error: null }));
+          void get().sync();
           return saved;
         } catch (error) {
           const message = error instanceof Error ? error.message : "Supabase sync failed.";
@@ -99,6 +107,7 @@ export const useCatStore = create<State>()(
         try {
           await api.deleteExpense(id);
           set({ error: null });
+          void get().sync();
         } catch (error) {
           const message = error instanceof Error ? error.message : "Supabase sync failed.";
           if (deleted) set((state) => ({ expenses: sortExpenses([deleted, ...state.expenses]), error: message }));
@@ -112,6 +121,7 @@ export const useCatStore = create<State>()(
         const saved = await api.saveExpense(expense);
         set((state) => ({ expenses: sortExpenses([saved, ...state.expenses.filter((item) => item.id !== saved.id)]), error: null }));
         cache.setExpenses(get().expenses);
+        void get().sync();
       },
       async addCategory(category) {
         const now = new Date().toISOString();
@@ -122,6 +132,7 @@ export const useCatStore = create<State>()(
           const saved = await api.saveCategory(category);
           set((state) => ({ categories: state.categories.map((item) => (item.id === local.id ? saved : item)), error: null }));
           cache.setCategories(get().categories);
+          void get().sync();
         } catch (error) {
           const message = error instanceof Error ? error.message : "Supabase sync failed.";
           set((state) => ({ categories: state.categories.filter((item) => item.id !== local.id), error: message }));
@@ -140,6 +151,7 @@ export const useCatStore = create<State>()(
         try {
           await api.deleteCategory(id);
           set({ error: null });
+          void get().sync();
         } catch (error) {
           const message = error instanceof Error ? error.message : "Supabase sync failed.";
           if (deleted && !deleted.isDefault) set((state) => ({ categories: [...state.categories, deleted].sort((a, b) => a.name.localeCompare(b.name)), error: message }));
