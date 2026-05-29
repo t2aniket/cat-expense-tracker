@@ -38,8 +38,12 @@ export default function HistoryPage() {
 
   async function onDelete(expense: Expense) {
     if (!window.confirm(`Delete ${expense.category} expense of ₹${expense.amount}?`)) return;
-    const deleted = await removeExpense(expense.id);
-    if (deleted) toast("Expense deleted", { action: { label: "Undo", onClick: () => void restoreExpense(deleted) } });
+    try {
+      const deleted = await removeExpense(expense.id);
+      if (deleted) toast("Expense deleted", { action: { label: "Undo", onClick: () => void restoreExpense(deleted).catch((error) => toast.error(error instanceof Error ? error.message : "Could not restore expense")) } });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete from Supabase");
+    }
   }
 
   return (

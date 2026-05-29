@@ -44,8 +44,13 @@ export default function SettingsPage() {
 
   async function onAddCategory() {
     if (!categoryName.trim()) return;
-    await addCategory({ name: categoryName.trim(), color: categoryColor, icon: "Tag", isFavorite: false });
-    setCategoryName("");
+    try {
+      await addCategory({ name: categoryName.trim(), color: categoryColor, icon: "Tag", isFavorite: false });
+      setCategoryName("");
+      toast.success("Category saved to shared database");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save category");
+    }
   }
 
   return (
@@ -79,7 +84,14 @@ export default function SettingsPage() {
           {categories.map((category) => (
             <div key={category.id} className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-black/5 px-3 dark:bg-white/10">
               <span className="flex items-center gap-2 font-semibold"><span className="h-3 w-3 rounded-full" style={{ background: category.color }} />{category.name}</span>
-              <Button type="button" size="icon" variant="ghost" disabled={category.isDefault} onClick={() => void removeCategory(category.id)} aria-label={`Delete ${category.name}`}>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                disabled={category.isDefault}
+                onClick={() => void removeCategory(category.id).catch((error) => toast.error(error instanceof Error ? error.message : "Could not delete category"))}
+                aria-label={`Delete ${category.name}`}
+              >
                 <Trash2 size={17} />
               </Button>
             </div>

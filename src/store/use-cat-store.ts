@@ -69,12 +69,14 @@ export const useCatStore = create<State>()(
           cache.setExpenses(get().expenses);
           return saved;
         } catch (error) {
+          const message = error instanceof Error ? error.message : "Supabase sync failed.";
+          set((state) => ({ expenses: state.expenses.filter((expense) => expense.id !== optimistic.id), error: message }));
           cache.setExpenses(get().expenses);
-          set({ error: error instanceof Error ? error.message : "Saved offline. Configure Supabase to sync." });
-          return optimistic;
+          throw new Error(message);
         }
       },
       async updateExpense(expense) {
+        const previous = get().expenses.find((item) => item.id === expense.id);
         const updated = { ...expense, updatedAt: new Date().toISOString() };
         set((state) => ({ expenses: sortExpenses(state.expenses.map((item) => (item.id === expense.id ? updated : item))) }));
         cache.setExpenses(get().expenses);
@@ -83,8 +85,11 @@ export const useCatStore = create<State>()(
           set((state) => ({ expenses: sortExpenses(state.expenses.map((item) => (item.id === saved.id ? saved : item))), error: null }));
           return saved;
         } catch (error) {
-          set({ error: error instanceof Error ? error.message : "Updated locally. Sync failed." });
-          return updated;
+          const message = error instanceof Error ? error.message : "Supabase sync failed.";
+          if (previous) set((state) => ({ expenses: sortExpenses(state.expenses.map((item) => (item.id === previous.id ? previous : item))), error: message }));
+          else set({ error: message });
+          cache.setExpenses(get().expenses);
+          throw new Error(message);
         }
       },
       async removeExpense(id) {
@@ -93,32 +98,55 @@ export const useCatStore = create<State>()(
         cache.setExpenses(get().expenses);
         try {
           await api.deleteExpense(id);
+          set({ error: null });
         } catch (error) {
-          set({ error: error instanceof Error ? error.message : "Deleted locally. Sync failed." });
+          const message = error instanceof Error ? error.message : "Supabase sync failed.";
+          if (deleted) set((state) => ({ expenses: sortExpenses([deleted, ...state.expenses]), error: message }));
+          else set({ error: message });
+          cache.setExpenses(get().expenses);
+          throw new Error(message);
         }
         return deleted;
       },
       async restoreExpense(expense) {
-        set((state) => ({ expenses: sortExpenses([expense, ...state.expenses.filter((item) => item.id !== expense.id)]) }));
+        const saved = await api.saveExpense(expense);
+        set((state) => ({ expenses: sortExpenses([saved, ...state.expenses.filter((item) => item.id !== saved.id)]), error: null }));
         cache.setExpenses(get().expenses);
-        await api.saveExpense(expense).catch(() => undefined);
       },
       async addCategory(category) {
         const now = new Date().toISOString();
         const local: Category = { ...category, id: crypto.randomUUID(), isDefault: false, createdAt: now, updatedAt: now };
         set((state) => ({ categories: [...state.categories, local].sort((a, b) => a.name.localeCompare(b.name)) }));
         cache.setCategories(get().categories);
-        const saved = await api.saveCategory(category).catch(() => local);
-        set((state) => ({ categories: state.categories.map((item) => (item.id === local.id ? saved : item)) }));
+        try {
+          const saved = await api.saveCategory(category);
+          set((state) => ({ categories: state.categories.map((item) => (item.id === local.id ? saved : item)), error: null }));
+          cache.setCategories(get().categories);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Supabase sync failed.";
+          set((state) => ({ categories: state.categories.filter((item) => item.id !== local.id), error: message }));
+          cache.setCategories(get().categories);
+          throw new Error(message);
+        }
       },
       updateCategoryLocal(category) {
         set((state) => ({ categories: state.categories.map((item) => (item.id === category.id ? category : item)) }));
         cache.setCategories(get().categories);
       },
       async removeCategory(id) {
+        const deleted = get().categories.find((category) => category.id === id);
         set((state) => ({ categories: state.categories.filter((category) => category.id !== id || category.isDefault) }));
         cache.setCategories(get().categories);
-        await api.deleteCategory(id).catch(() => undefined);
+        try {
+          await api.deleteCategory(id);
+          set({ error: null });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Supabase sync failed.";
+          if (deleted && !deleted.isDefault) set((state) => ({ categories: [...state.categories, deleted].sort((a, b) => a.name.localeCompare(b.name)), error: message }));
+          else set({ error: message });
+          cache.setCategories(get().categories);
+          throw new Error(message);
+        }
       },
       setPreferences(partial) {
         const preferences = { ...get().preferences, ...partial };

@@ -43,16 +43,20 @@ export function ExpenseForm({ editing, onDone }: { editing?: Expense; onDone?: (
   }, [form]);
 
   async function onSubmit(input: ExpenseInput) {
-    if (editing) {
-      await updateExpense({ ...editing, ...input, notes: input.notes || "" });
-      toast.success("Expense updated");
-      onDone?.();
-      return;
+    try {
+      if (editing) {
+        await updateExpense({ ...editing, ...input, notes: input.notes || "" });
+        toast.success("Expense updated");
+        onDone?.();
+        return;
+      }
+      await addExpense({ amount: input.amount, category: input.category, date: input.date, time: input.time, notes: input.notes || "" });
+      toast.success(`${currency(input.amount)} saved to shared database`);
+      form.reset({ amount: "", category: input.category, date: todayInputValue(), time: timeInputValue(), notes: "" });
+      form.setFocus("amount");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save to Supabase");
     }
-    await addExpense({ amount: input.amount, category: input.category, date: input.date, time: input.time, notes: input.notes || "" });
-    toast.success(`${currency(input.amount)} saved`);
-    form.reset({ amount: "", category: input.category, date: todayInputValue(), time: timeInputValue(), notes: "" });
-    form.setFocus("amount");
   }
 
   function duplicatePrevious() {
