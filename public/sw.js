@@ -1,4 +1,4 @@
-const CACHE_NAME = "cat-expense-tracker-v1";
+const CACHE_NAME = "cat-expense-tracker-v2";
 const APP_SHELL = ["/", "/add", "/history", "/analytics", "/calendar", "/settings", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -13,7 +13,7 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/")) return;
 
   event.respondWith(
     fetch(request)

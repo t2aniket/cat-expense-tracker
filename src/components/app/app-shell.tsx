@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const syncWhenVisible = () => {
       if (document.visibilityState === "visible") void sync();
     };
-    const interval = window.setInterval(syncWhenVisible, 7000);
+    const interval = window.setInterval(syncWhenVisible, 3000);
     window.addEventListener("focus", syncWhenVisible);
     document.addEventListener("visibilitychange", syncWhenVisible);
     return () => {
@@ -40,6 +40,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       document.removeEventListener("visibilitychange", syncWhenVisible);
     };
   }, [sync]);
+
+  useEffect(() => {
+    void sync();
+  }, [pathname, sync]);
 
   useEffect(() => {
     const root = document.documentElement;
