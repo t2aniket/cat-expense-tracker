@@ -15,7 +15,7 @@ import { useCatStore } from "@/store/use-cat-store";
 import type { Expense } from "@/types/domain";
 
 export function ExpenseForm({ editing, onDone }: { editing?: Expense; onDone?: () => void }) {
-  const [detailsOpen, setDetailsOpen] = useState(Boolean(editing));
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const categories = useCatStore((state) => state.categories);
   const expenses = useCatStore((state) => state.expenses);
   const preferences = useCatStore((state) => state.preferences);
@@ -46,15 +46,16 @@ export function ExpenseForm({ editing, onDone }: { editing?: Expense; onDone?: (
   }, [form]);
 
   async function onSubmit(input: ExpenseInput) {
+    const effectivePaidByUserId = paidByUserId || currentUser?.id || "";
     try {
       if (editing) {
-        const payer = members.find((member) => member.userId === paidByUserId);
-        await updateExpense({ ...editing, ...input, paidByUserId: paidByUserId || currentUser?.id, paidByName: payer?.name || currentUser?.name || "Me", notes: input.notes || "" });
+        const payer = members.find((member) => member.userId === effectivePaidByUserId);
+        await updateExpense({ ...editing, ...input, paidByUserId: effectivePaidByUserId, paidByName: payer?.name || currentUser?.name || "Me", notes: input.notes || "" });
         toast.success("Expense updated");
         onDone?.();
         return;
       }
-      await addExpense({ amount: input.amount, category: input.category, paidByUserId: paidByUserId || currentUser?.id, date: input.date, time: input.time, notes: input.notes || "" });
+      await addExpense({ amount: input.amount, category: input.category, paidByUserId: effectivePaidByUserId, date: input.date, time: input.time, notes: input.notes || "" });
       toast.success(`${currency(input.amount)} saved to shared database`);
       form.reset({ amount: "", category: input.category, date: todayInputValue(), time: timeInputValue(), notes: "" });
       form.setFocus("amount");
@@ -67,6 +68,7 @@ export function ExpenseForm({ editing, onDone }: { editing?: Expense; onDone?: (
     const previous = expenses[0];
     if (!previous) return;
     form.reset({ amount: previous.amount, category: previous.category, date: todayInputValue(), time: timeInputValue(), notes: previous.notes });
+    setPaidByUserId(previous.paidByUserId || currentUser?.id || "");
     setDetailsOpen(true);
   }
 

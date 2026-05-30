@@ -1,7 +1,7 @@
 "use client";
 
-import { Download, RotateCcw, Trash2, Upload } from "lucide-react";
-import { ChangeEvent, useState } from "react";
+import { Download, RotateCcw, Trash2, Upload, UserPlus } from "lucide-react";
+import { ChangeEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { CATEGORY_COLORS } from "@/constants/categories";
 import { downloadFile } from "@/lib/utils";
 import { expensesToCsv, parseExpenseCsv } from "@/services/api-client";
 import { useCatStore } from "@/store/use-cat-store";
+import type { Project } from "@/types/domain";
 
 export default function SettingsPage() {
   const expenses = useCatStore((state) => state.expenses);
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const members = useCatStore((state) => state.members);
   const currentUser = useCatStore((state) => state.currentUser);
   const selectedProjectId = useCatStore((state) => state.selectedProjectId);
+  const selectProject = useCatStore((state) => state.selectProject);
   const createProject = useCatStore((state) => state.createProject);
   const addProjectMember = useCatStore((state) => state.addProjectMember);
   const removeProjectMember = useCatStore((state) => state.removeProjectMember);
@@ -34,9 +36,13 @@ export default function SettingsPage() {
   const [categoryColor, setCategoryColor] = useState(CATEGORY_COLORS[0]);
   const [projectName, setProjectName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
+  const [memberRole, setMemberRole] = useState<Project["role"]>("member");
+
+  const selectedProject = useMemo(() => projects.find((project) => project.id === selectedProjectId), [projects, selectedProjectId]);
+  const canManageMembers = selectedProject?.role === "owner" || selectedProject?.role === "admin";
 
   function exportJson() {
-    downloadFile(`cat-expense-backup-${Date.now()}.json`, JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), expenses, categories, preferences }, null, 2), "application/json");
+    downloadFile(`cat-expense-backup-${Date.now()}.json`, JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), project: selectedProject, expenses, categories, preferences }, null, 2), "application/json");
   }
 
   function exportCsv() {
@@ -77,9 +83,14 @@ export default function SettingsPage() {
 
   async function onInviteMember() {
     if (!memberEmail.trim()) return;
+    if (!selectedProjectId) {
+      toast.error("Select a project first");
+      return;
+    }
     try {
-      await addProjectMember(memberEmail.trim(), "member");
+      await addProjectMember(memberEmail.trim(), memberRole);
       setMemberEmail("");
+      setMemberRole("member");
       toast.success("Invite sent");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not invite member");
@@ -90,23 +101,19 @@ export default function SettingsPage() {
     <div className="grid gap-5">
       <header className="pr-12">
         <h1 className="text-4xl font-bold tracking-normal">Settings</h1>
-        <p className="mt-2 text-[var(--muted)]">Theme, projects, invites, categories, backup, and data tools.</p>
+        <p className="mt-2 text-[var(--muted)]">Manage projects, members, categories, theme, and data.</p>
       </header>
-
-      <Card className="grid gap-4">
-        <Select label="Theme" value={preferences.theme} onChange={(event) => setPreferences({ theme: event.target.value as typeof preferences.theme })}>
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </Select>
-        <Field label="Monthly Budget" inputMode="decimal" type="number" value={preferences.budgetMonthly} onChange={(event) => setPreferences({ budgetMonthly: Number(event.target.value) })} />
-        <Field label="Budget Alert Percent" inputMode="numeric" type="number" value={preferences.budgetAlertPercent} onChange={(event) => setPreferences({ budgetAlertPercent: Number(event.target.value) })} />
-      </Card>
 
       <Card className="grid gap-4">
         <h2 className="text-xl font-bold">Projects</h2>
         {projects.length === 0 && <p className="text-sm text-[var(--muted)]">No projects yet. Create one or accept an invite below.</p>}
-        <Field label="New Project" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Cat Food Tracker" />
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <Field label="New Project" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Cat Food Tracker" />
+          <label className="grid gap-2 text-sm font-medium text-[var(--muted)]">
+            Color
+            <input aria-label="Project color" type="color" value={categoryColor} onChange={(event) => setCategoryColor(event.target.value)} className="h-12 w-14 rounded-2xl border border-[var(--border)] bg-transparent" />
+          </label>
+        </div>
         <Button type="button" onClick={onCreateProject}>Create Project</Button>
 
         {invites.length > 0 && (
@@ -126,27 +133,42 @@ export default function SettingsPage() {
         )}
 
         <div className="grid gap-2">
-          {projects.map((project) => (
-            <div key={project.id} className="rounded-2xl bg-black/5 px-3 py-3 text-sm dark:bg-white/10">
-              <p className="font-bold">{project.name}</p>
-              <p className="text-[var(--muted)]">{project.role} · {project.memberCount} people{project.id === selectedProjectId ? " · selected" : ""}</p>
-            </div>
-          ))}
+          {projects.map((project) => {
+            const active = project.id === selectedProjectId;
+            return (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => selectProject(project.id)}
+                className={`grid min-h-16 gap-1 rounded-2xl border px-3 py-3 text-left text-sm transition ${active ? "border-[var(--accent)] bg-teal-500/10" : "border-transparent bg-black/5 dark:bg-white/10"}`}
+              >
+                <span className="font-bold">{project.name}</span>
+                <span className="text-[var(--muted)]">{project.role} - {project.memberCount} people{active ? " - selected" : ""}</span>
+              </button>
+            );
+          })}
         </div>
+      </Card>
+
+      <Card className="grid gap-4">
+        <div>
+          <h2 className="text-xl font-bold">{selectedProject ? selectedProject.name : "Project Members"}</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">{selectedProject ? `${selectedProject.memberCount} people in this project` : "Select a project above to manage members."}</p>
+        </div>
+
         {members.length > 0 && (
           <div className="grid gap-2">
-            <h3 className="font-bold">Members</h3>
             {members.map((member) => (
-              <div key={member.userId} className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-black/5 px-3 py-2 dark:bg-white/10">
+              <div key={member.userId} className="flex min-h-14 items-center justify-between gap-3 rounded-2xl bg-black/5 px-3 py-2 dark:bg-white/10">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{member.name}{member.userId === currentUser?.id ? " (me)" : ""}</p>
-                  <p className="truncate text-xs text-[var(--muted)]">{member.email} · {member.role}</p>
+                  <p className="truncate text-xs text-[var(--muted)]">{member.email} - {member.role}</p>
                 </div>
                 <Button
                   type="button"
                   size="icon"
                   variant="ghost"
-                  disabled={member.userId === currentUser?.id}
+                  disabled={!canManageMembers || member.userId === currentUser?.id}
                   onClick={() => void removeProjectMember(member.userId).then(() => toast.success("Member removed")).catch((error) => toast.error(error instanceof Error ? error.message : "Could not remove member"))}
                   aria-label={`Remove ${member.name}`}
                 >
@@ -156,12 +178,40 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
-        <Field label="Invite Member Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="friend@gmail.com" />
-        <Button type="button" variant="secondary" onClick={onInviteMember}>Send Invite To Selected Project</Button>
+
+        {canManageMembers ? (
+          <div className="grid gap-3">
+            <div className="grid grid-cols-[1fr_8rem] gap-2">
+              <Field label="Invite Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="friend@gmail.com" />
+              <Select label="Role" value={memberRole} onChange={(event) => setMemberRole(event.target.value as Project["role"])}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
+              </Select>
+            </div>
+            <Button type="button" variant="secondary" onClick={onInviteMember}>
+              <UserPlus size={18} />
+              Send Invite
+            </Button>
+          </div>
+        ) : (
+          <p className="rounded-2xl bg-black/5 p-3 text-sm text-[var(--muted)] dark:bg-white/10">Only owners and admins can invite or remove members.</p>
+        )}
       </Card>
 
       <Card className="grid gap-4">
-        <h2 className="text-xl font-bold">Manage Categories</h2>
+        <h2 className="text-xl font-bold">Preferences</h2>
+        <Select label="Theme" value={preferences.theme} onChange={(event) => setPreferences({ theme: event.target.value as typeof preferences.theme })}>
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </Select>
+        <Field label="Monthly Budget" inputMode="decimal" type="number" value={preferences.budgetMonthly} onChange={(event) => setPreferences({ budgetMonthly: Number(event.target.value) })} />
+        <Field label="Budget Alert Percent" inputMode="numeric" type="number" value={preferences.budgetAlertPercent} onChange={(event) => setPreferences({ budgetAlertPercent: Number(event.target.value) })} />
+      </Card>
+
+      <Card className="grid gap-4">
+        <h2 className="text-xl font-bold">Categories</h2>
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <Field label="New Category" value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Insurance" />
           <label className="grid gap-2 text-sm font-medium text-[var(--muted)]">
