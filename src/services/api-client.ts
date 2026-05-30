@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import type { Category, Expense } from "@/types/domain";
+import type { AppUser, Category, Expense, Project } from "@/types/domain";
 
 async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -15,7 +15,10 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise
 
 export const api = {
   async listExpenses() {
-    const data = await request<{ expenses: Expense[]; warning?: string }>("/api/expenses");
+    throw new Error("Project id is required.");
+  },
+  async listProjectExpenses(projectId: string) {
+    const data = await request<{ expenses: Expense[]; warning?: string }>(`/api/expenses?projectId=${encodeURIComponent(projectId)}`);
     if (data.warning) throw new Error(data.warning);
     return data.expenses;
   },
@@ -23,20 +26,30 @@ export const api = {
     const data = await request<{ expense: Expense }>("/api/expenses", { method: "POST", body: JSON.stringify(expense) });
     return data.expense;
   },
-  async deleteExpense(id: string) {
-    await request<{ ok: true }>(`/api/expenses?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  async deleteExpense(id: string, projectId: string) {
+    await request<{ ok: true }>(`/api/expenses?id=${encodeURIComponent(id)}&projectId=${encodeURIComponent(projectId)}`, { method: "DELETE" });
   },
-  async listCategories() {
-    const data = await request<{ categories: Category[]; warning?: string }>("/api/categories");
+  async listCategories(projectId: string) {
+    const data = await request<{ categories: Category[]; warning?: string }>(`/api/categories?projectId=${encodeURIComponent(projectId)}`);
     if (data.warning) throw new Error(data.warning);
     return data.categories;
   },
-  async saveCategory(category: Partial<Category> & Pick<Category, "name" | "color" | "icon" | "isFavorite">) {
+  async saveCategory(category: Partial<Category> & Pick<Category, "name" | "color" | "icon" | "isFavorite"> & { projectId: string }) {
     const data = await request<{ category: Category }>("/api/categories", { method: "POST", body: JSON.stringify(category) });
     return data.category;
   },
-  async deleteCategory(id: string) {
-    await request<{ ok: true }>(`/api/categories?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  async deleteCategory(id: string, projectId: string) {
+    await request<{ ok: true }>(`/api/categories?id=${encodeURIComponent(id)}&projectId=${encodeURIComponent(projectId)}`, { method: "DELETE" });
+  },
+  async listProjects() {
+    return request<{ projects: Project[]; user: AppUser; warning?: string }>("/api/projects");
+  },
+  async createProject(project: Pick<Project, "name"> & Partial<Pick<Project, "description" | "color" | "icon">>) {
+    const data = await request<{ project: Project }>("/api/projects", { method: "POST", body: JSON.stringify(project) });
+    return data.project;
+  },
+  async addProjectMember(input: { projectId: string; email: string; role: Project["role"] }) {
+    await request<{ ok: true }>("/api/projects", { method: "POST", body: JSON.stringify(input) });
   }
 };
 

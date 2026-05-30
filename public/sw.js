@@ -1,4 +1,4 @@
-const CACHE_NAME = "cat-expense-tracker-v2";
+const CACHE_NAME = "cat-expense-tracker-v3";
 const APP_SHELL = ["/", "/add", "/history", "/analytics", "/calendar", "/settings", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

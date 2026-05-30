@@ -1,7 +1,10 @@
 export type Expense = {
   id: string;
+  projectId?: string;
   amount: number;
   category: string;
+  paidByUserId?: string;
+  paidByName?: string;
   date: string;
   time: string;
   notes: string;
@@ -11,6 +14,7 @@ export type Expense = {
 
 export type Category = {
   id: string;
+  projectId?: string;
   name: string;
   color: string;
   icon: string;
@@ -27,6 +31,24 @@ export type UserPreferences = {
   budgetMonthly: number;
   budgetAlertPercent: number;
   quickAmounts: number[];
+};
+
+export type AppUser = {
+  id: string;
+  name: string;
+  email: string;
+  image: string;
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+  role: "owner" | "admin" | "member" | "viewer";
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type SortMode = "latest" | "oldest" | "highest" | "lowest";

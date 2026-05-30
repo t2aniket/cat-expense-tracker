@@ -12,6 +12,10 @@ Optional local `.env.local`:
 POSTGRES_URL="postgres://user:password@host/database?sslmode=require"
 CAT_APP_INSTANCE_ID="personal-cat-expenses"
 NEXT_PUBLIC_APP_NAME="Cat Expense Tracker"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="generate-a-long-random-secret"
+GOOGLE_CLIENT_ID="your-google-oauth-client-id"
+GOOGLE_CLIENT_SECRET="your-google-oauth-client-secret"
 ```
 
 Use Node 22 on Vercel. This project is configured for a no-login personal app using server-side Next.js route handlers and Postgres.
@@ -25,6 +29,39 @@ Use Node 22 on Vercel. This project is configured for a no-login personal app us
 5. Redeploy.
 
 The app creates its own tables automatically on first API request.
+
+## Google Login
+
+1. Open Google Cloud Console.
+2. Create or select a project.
+3. Go to APIs & Services, then OAuth consent screen.
+4. Configure the app name and your email.
+5. Go to Credentials.
+6. Create OAuth Client ID.
+7. Choose Web application.
+8. Add this Authorized JavaScript origin:
+
+```text
+https://cat-expense-tracker.vercel.app
+```
+
+9. Add this Authorized redirect URI:
+
+```text
+https://cat-expense-tracker.vercel.app/api/auth/callback/google
+```
+
+10. Copy the client ID and secret into Vercel:
+
+```bash
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+NEXTAUTH_URL="https://cat-expense-tracker.vercel.app"
+NEXTAUTH_SECRET="a-long-random-secret"
+CAT_APP_INSTANCE_ID="personal-cat-expenses"
+```
+
+The first Google user to open the app becomes owner of the migrated Cat Expense Tracker project. Existing old expenses are kept and moved into that project automatically.
 
 ## GitHub and Vercel
 

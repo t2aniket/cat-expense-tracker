@@ -1,10 +1,10 @@
 # Cat Expense Tracker
 
-A production-ready mobile-first Next.js PWA for quickly tracking personal cat expenses with Vercel/Neon Postgres persistence, analytics, reports, calendar views, import/export, dark mode, and offline app-shell support. It is intentionally no-login for personal use.
+A production-ready mobile-first Next.js PWA for tracking project-based shared expenses with Google login, Vercel/Neon Postgres persistence, analytics, reports, calendar views, import/export, dark mode, and offline app-shell support. Existing cat expenses migrate into a default Cat Expense Tracker project.
 
 ## Stack
 
-Next.js App Router, TypeScript, Tailwind CSS, Zustand, Recharts, React Hook Form, Zod, Postgres, Vitest, and PWA support.
+Next.js App Router, TypeScript, Tailwind CSS, Zustand, Recharts, React Hook Form, Zod, NextAuth Google login, Postgres, Vitest, and PWA support.
 
 ## Quick Start
 

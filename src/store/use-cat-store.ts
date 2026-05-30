@@ -5,18 +5,24 @@ import { persist } from "zustand/middleware";
 import { DEFAULT_CATEGORIES } from "@/constants/categories";
 import { api } from "@/services/api-client";
 import { cache, defaultPreferences } from "@/services/client-storage";
-import type { Category, Expense, SortMode, UserPreferences } from "@/types/domain";
+import type { AppUser, Category, Expense, Project, SortMode, UserPreferences } from "@/types/domain";
 
 type State = {
   expenses: Expense[];
   categories: Category[];
+  projects: Project[];
+  currentUser: AppUser | null;
+  selectedProjectId: string;
   preferences: UserPreferences;
   isReady: boolean;
   isSyncing: boolean;
   error: string | null;
   hydrate: () => Promise<void>;
   sync: () => Promise<void>;
-  addExpense: (expense: Omit<Expense, "id" | "createdAt" | "updatedAt">) => Promise<Expense>;
+  selectProject: (projectId: string) => void;
+  createProject: (project: Pick<Project, "name"> & Partial<Pick<Project, "description" | "color" | "icon">>) => Promise<void>;
+  addProjectMember: (email: string, role: Project["role"]) => Promise<void>;
+  addExpense: (expense: Omit<Expense, "id" | "createdAt" | "updatedAt" | "projectId" | "paidByUserId" | "paidByName"> & Partial<Pick<Expense, "paidByUserId">>) => Promise<Expense>;
   updateExpense: (expense: Expense) => Promise<Expense>;
   removeExpense: (id: string) => Promise<Expense | undefined>;
   restoreExpense: (expense: Expense) => Promise<void>;
@@ -43,29 +49,53 @@ export const useCatStore = create<State>()(
     (set, get) => ({
       expenses: [],
       categories: DEFAULT_CATEGORIES,
+      projects: [],
+      currentUser: null,
+      selectedProjectId: "",
       preferences: defaultPreferences,
       isReady: false,
       isSyncing: false,
       error: null,
       async hydrate() {
-        set({ expenses: cache.getExpenses(), categories: cache.getCategories(), preferences: cache.getPreferences(), isSyncing: true });
+        set({ expenses: cache.getExpenses(), categories: cache.getCategories(), projects: cache.getProjects() as Project[], preferences: cache.getPreferences(), isSyncing: true });
         await get().sync();
       },
       async sync() {
         if (get().isSyncing && get().isReady) return;
         set({ isSyncing: true });
         try {
-          const [expenses, categories] = await Promise.all([api.listExpenses(), api.listCategories()]);
+          const projectPayload = await api.listProjects();
+          const projects = projectPayload.projects;
+          const selectedProjectId = get().selectedProjectId && projects.some((project) => project.id === get().selectedProjectId) ? get().selectedProjectId : projects[0]?.id || "";
+          const [expenses, categories] = selectedProjectId ? await Promise.all([api.listProjectExpenses(selectedProjectId), api.listCategories(selectedProjectId)]) : [[], DEFAULT_CATEGORIES];
           cache.setExpenses(expenses);
           cache.setCategories(categories);
-          set({ expenses: sortExpenses(expenses), categories, isReady: true, isSyncing: false, error: null });
+          cache.setProjects(projects);
+          set({ expenses: sortExpenses(expenses), categories, projects, currentUser: projectPayload.user, selectedProjectId, isReady: true, isSyncing: false, error: null });
         } catch (error) {
           set({ isReady: true, isSyncing: false, error: error instanceof Error ? error.message : "Offline cache is active." });
         }
       },
+      selectProject(projectId) {
+        set({ selectedProjectId: projectId, expenses: [], categories: DEFAULT_CATEGORIES });
+        void get().sync();
+      },
+      async createProject(project) {
+        const created = await api.createProject(project);
+        set((state) => ({ projects: [...state.projects, created], selectedProjectId: created.id }));
+        await get().sync();
+      },
+      async addProjectMember(email, role) {
+        const projectId = get().selectedProjectId;
+        if (!projectId) throw new Error("Select a project first.");
+        await api.addProjectMember({ projectId, email, role });
+      },
       async addExpense(input) {
+        const projectId = get().selectedProjectId;
+        if (!projectId) throw new Error("Select a project first.");
+        const currentUser = get().currentUser;
         const now = new Date().toISOString();
-        const optimistic: Expense = { ...input, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+        const optimistic: Expense = { ...input, id: crypto.randomUUID(), projectId, paidByUserId: input.paidByUserId || currentUser?.id || "", paidByName: currentUser?.name || "Me", createdAt: now, updatedAt: now };
         const nextPreferences = { ...get().preferences, lastCategory: input.category };
         set((state) => ({ expenses: sortExpenses([optimistic, ...state.expenses]), preferences: nextPreferences }));
         cache.setPreferences(nextPreferences);
@@ -101,11 +131,12 @@ export const useCatStore = create<State>()(
         }
       },
       async removeExpense(id) {
+        const projectId = get().selectedProjectId;
         const deleted = get().expenses.find((expense) => expense.id === id);
         set((state) => ({ expenses: state.expenses.filter((expense) => expense.id !== id) }));
         cache.setExpenses(get().expenses);
         try {
-          await api.deleteExpense(id);
+          await api.deleteExpense(id, projectId);
           set({ error: null });
           void get().sync();
         } catch (error) {
@@ -124,12 +155,14 @@ export const useCatStore = create<State>()(
         void get().sync();
       },
       async addCategory(category) {
+        const projectId = get().selectedProjectId;
+        if (!projectId) throw new Error("Select a project first.");
         const now = new Date().toISOString();
-        const local: Category = { ...category, id: crypto.randomUUID(), isDefault: false, createdAt: now, updatedAt: now };
+        const local: Category = { ...category, id: crypto.randomUUID(), projectId, isDefault: false, createdAt: now, updatedAt: now };
         set((state) => ({ categories: [...state.categories, local].sort((a, b) => a.name.localeCompare(b.name)) }));
         cache.setCategories(get().categories);
         try {
-          const saved = await api.saveCategory(category);
+          const saved = await api.saveCategory({ ...category, projectId });
           set((state) => ({ categories: state.categories.map((item) => (item.id === local.id ? saved : item)), error: null }));
           cache.setCategories(get().categories);
           void get().sync();
@@ -145,11 +178,12 @@ export const useCatStore = create<State>()(
         cache.setCategories(get().categories);
       },
       async removeCategory(id) {
+        const projectId = get().selectedProjectId;
         const deleted = get().categories.find((category) => category.id === id);
         set((state) => ({ categories: state.categories.filter((category) => category.id !== id || category.isDefault) }));
         cache.setCategories(get().categories);
         try {
-          await api.deleteCategory(id);
+          await api.deleteCategory(id, projectId);
           set({ error: null });
           void get().sync();
         } catch (error) {
@@ -169,7 +203,7 @@ export const useCatStore = create<State>()(
         for (const expense of expenses) await get().updateExpense(expense);
       },
       resetAll() {
-        set({ expenses: [], categories: DEFAULT_CATEGORIES, preferences: defaultPreferences });
+        set({ expenses: [], categories: DEFAULT_CATEGORIES, projects: [], selectedProjectId: "", preferences: defaultPreferences });
         cache.setExpenses([]);
         cache.setCategories(DEFAULT_CATEGORIES);
         cache.setPreferences(defaultPreferences);

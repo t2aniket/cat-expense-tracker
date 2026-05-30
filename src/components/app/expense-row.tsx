@@ -14,7 +14,7 @@ export function ExpenseRow({ expense, onEdit, onDelete }: { expense: Expense; on
           <p className="truncate font-bold">{expense.category}</p>
           <span className="rounded-full bg-black/5 px-2 py-1 text-xs font-semibold text-[var(--muted)] dark:bg-white/10">{format(parseISO(expense.date), "dd MMM")}</span>
         </div>
-        <p className="mt-1 text-sm text-[var(--muted)]">{expense.time}{expense.notes ? ` · ${expense.notes}` : ""}</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">{expense.time} · Paid by {expense.paidByName || "Unknown"}{expense.notes ? ` · ${expense.notes}` : ""}</p>
       </div>
       <div className="grid justify-items-end gap-2">
         <p className="text-lg font-bold">{currency(expense.amount)}</p>

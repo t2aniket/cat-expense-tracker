@@ -4,6 +4,7 @@ import { DEFAULT_CATEGORIES } from "@/constants/categories";
 const keys = {
   expenses: "cat-expenses-cache",
   categories: "cat-categories-cache",
+  projects: "cat-projects-cache",
   preferences: "cat-preferences"
 };
 
@@ -35,6 +36,8 @@ export const cache = {
   setExpenses: (expenses: Expense[]) => write(keys.expenses, expenses),
   getCategories: () => read<Category[]>(keys.categories, DEFAULT_CATEGORIES),
   setCategories: (categories: Category[]) => write(keys.categories, categories),
+  getProjects: () => read(keys.projects, []),
+  setProjects: (projects: unknown[]) => write(keys.projects, projects),
   getPreferences: () => read<UserPreferences>(keys.preferences, defaultPreferences),
   setPreferences: (preferences: UserPreferences) => write(keys.preferences, preferences)
 };

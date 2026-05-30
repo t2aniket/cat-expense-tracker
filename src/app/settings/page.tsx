@@ -19,10 +19,16 @@ export default function SettingsPage() {
   const setPreferences = useCatStore((state) => state.setPreferences);
   const addCategory = useCatStore((state) => state.addCategory);
   const removeCategory = useCatStore((state) => state.removeCategory);
+  const projects = useCatStore((state) => state.projects);
+  const selectedProjectId = useCatStore((state) => state.selectedProjectId);
+  const createProject = useCatStore((state) => state.createProject);
+  const addProjectMember = useCatStore((state) => state.addProjectMember);
   const importExpenses = useCatStore((state) => state.importExpenses);
   const resetAll = useCatStore((state) => state.resetAll);
   const [categoryName, setCategoryName] = useState("");
   const [categoryColor, setCategoryColor] = useState(CATEGORY_COLORS[0]);
+  const [projectName, setProjectName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
 
   function exportJson() {
     downloadFile(`cat-expense-backup-${Date.now()}.json`, JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), expenses, categories, preferences }, null, 2), "application/json");
@@ -53,6 +59,28 @@ export default function SettingsPage() {
     }
   }
 
+  async function onCreateProject() {
+    if (!projectName.trim()) return;
+    try {
+      await createProject({ name: projectName.trim(), color: categoryColor, icon: "Wallet" });
+      setProjectName("");
+      toast.success("Project created");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create project");
+    }
+  }
+
+  async function onInviteMember() {
+    if (!memberEmail.trim()) return;
+    try {
+      await addProjectMember(memberEmail.trim(), "member");
+      setMemberEmail("");
+      toast.success("Member access added");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add member");
+    }
+  }
+
   return (
     <div className="grid gap-5">
       <header className="pr-12">
@@ -68,6 +96,22 @@ export default function SettingsPage() {
         </Select>
         <Field label="Monthly Budget" inputMode="decimal" type="number" value={preferences.budgetMonthly} onChange={(event) => setPreferences({ budgetMonthly: Number(event.target.value) })} />
         <Field label="Budget Alert Percent" inputMode="numeric" type="number" value={preferences.budgetAlertPercent} onChange={(event) => setPreferences({ budgetAlertPercent: Number(event.target.value) })} />
+      </Card>
+
+      <Card className="grid gap-4">
+        <h2 className="text-xl font-bold">Projects</h2>
+        <Field label="New Project" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Cat Food Tracker" />
+        <Button type="button" onClick={onCreateProject}>Create Project</Button>
+        <div className="grid gap-2">
+          {projects.map((project) => (
+            <div key={project.id} className="rounded-2xl bg-black/5 px-3 py-3 text-sm dark:bg-white/10">
+              <p className="font-bold">{project.name}</p>
+              <p className="text-[var(--muted)]">{project.role}{project.id === selectedProjectId ? " · selected" : ""}</p>
+            </div>
+          ))}
+        </div>
+        <Field label="Add Member Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="friend@gmail.com" />
+        <Button type="button" variant="secondary" onClick={onInviteMember}>Add Member To Selected Project</Button>
       </Card>
 
       <Card className="grid gap-4">
