@@ -19,11 +19,14 @@ export function ExpenseForm({ editing, onDone }: { editing?: Expense; onDone?: (
   const categories = useCatStore((state) => state.categories);
   const expenses = useCatStore((state) => state.expenses);
   const preferences = useCatStore((state) => state.preferences);
+  const members = useCatStore((state) => state.members);
+  const currentUser = useCatStore((state) => state.currentUser);
   const addExpense = useCatStore((state) => state.addExpense);
   const updateExpense = useCatStore((state) => state.updateExpense);
 
   const recentNotes = useMemo(() => Array.from(new Set(expenses.map((expense) => expense.notes).filter(Boolean))).slice(0, 5), [expenses]);
   const defaultCategory = editing?.category || preferences.lastCategory || preferences.favoriteCategory || categories[0]?.name || "Food";
+  const [paidByUserId, setPaidByUserId] = useState(editing?.paidByUserId || currentUser?.id || "");
 
   const form = useForm<ExpenseFormInput, unknown, ExpenseInput>({
     resolver: zodResolver(expenseSchema),
@@ -45,12 +48,13 @@ export function ExpenseForm({ editing, onDone }: { editing?: Expense; onDone?: (
   async function onSubmit(input: ExpenseInput) {
     try {
       if (editing) {
-        await updateExpense({ ...editing, ...input, notes: input.notes || "" });
+        const payer = members.find((member) => member.userId === paidByUserId);
+        await updateExpense({ ...editing, ...input, paidByUserId: paidByUserId || currentUser?.id, paidByName: payer?.name || currentUser?.name || "Me", notes: input.notes || "" });
         toast.success("Expense updated");
         onDone?.();
         return;
       }
-      await addExpense({ amount: input.amount, category: input.category, date: input.date, time: input.time, notes: input.notes || "" });
+      await addExpense({ amount: input.amount, category: input.category, paidByUserId: paidByUserId || currentUser?.id, date: input.date, time: input.time, notes: input.notes || "" });
       toast.success(`${currency(input.amount)} saved to shared database`);
       form.reset({ amount: "", category: input.category, date: todayInputValue(), time: timeInputValue(), notes: "" });
       form.setFocus("amount");
@@ -117,6 +121,13 @@ export function ExpenseForm({ editing, onDone }: { editing?: Expense; onDone?: (
             {categories.map((category) => (
               <option key={category.id} value={category.name}>
                 {category.name}
+              </option>
+            ))}
+          </Select>
+          <Select label="Paid By" value={paidByUserId || currentUser?.id || ""} onChange={(event) => setPaidByUserId(event.target.value)}>
+            {members.map((member) => (
+              <option key={member.userId} value={member.userId}>
+                {member.userId === currentUser?.id ? `${member.name} (me)` : member.name}
               </option>
             ))}
           </Select>

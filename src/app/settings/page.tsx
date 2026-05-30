@@ -21,9 +21,12 @@ export default function SettingsPage() {
   const removeCategory = useCatStore((state) => state.removeCategory);
   const projects = useCatStore((state) => state.projects);
   const invites = useCatStore((state) => state.invites);
+  const members = useCatStore((state) => state.members);
+  const currentUser = useCatStore((state) => state.currentUser);
   const selectedProjectId = useCatStore((state) => state.selectedProjectId);
   const createProject = useCatStore((state) => state.createProject);
   const addProjectMember = useCatStore((state) => state.addProjectMember);
+  const removeProjectMember = useCatStore((state) => state.removeProjectMember);
   const respondToInvite = useCatStore((state) => state.respondToInvite);
   const importExpenses = useCatStore((state) => state.importExpenses);
   const resetAll = useCatStore((state) => state.resetAll);
@@ -130,6 +133,29 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+        {members.length > 0 && (
+          <div className="grid gap-2">
+            <h3 className="font-bold">Members</h3>
+            {members.map((member) => (
+              <div key={member.userId} className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-black/5 px-3 py-2 dark:bg-white/10">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{member.name}{member.userId === currentUser?.id ? " (me)" : ""}</p>
+                  <p className="truncate text-xs text-[var(--muted)]">{member.email} · {member.role}</p>
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={member.userId === currentUser?.id}
+                  onClick={() => void removeProjectMember(member.userId).then(() => toast.success("Member removed")).catch((error) => toast.error(error instanceof Error ? error.message : "Could not remove member"))}
+                  aria-label={`Remove ${member.name}`}
+                >
+                  <Trash2 size={17} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
         <Field label="Invite Member Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="friend@gmail.com" />
         <Button type="button" variant="secondary" onClick={onInviteMember}>Send Invite To Selected Project</Button>
       </Card>

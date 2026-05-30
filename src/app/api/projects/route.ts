@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
-import { createProject, createProjectInvite, isDatabaseConfigured, listPendingInvites, listProjects, respondToProjectInvite, sessionToUser, upsertUser } from "@/services/database-server";
+import { createProject, createProjectInvite, isDatabaseConfigured, listPendingInvites, listProjectMembers, listProjects, removeProjectMember, respondToProjectInvite, sessionToUser, upsertUser } from "@/services/database-server";
 
 const projectSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -22,6 +22,11 @@ const inviteResponseSchema = z.object({
   accept: z.boolean()
 });
 
+const removeMemberSchema = z.object({
+  projectId: z.string().min(1),
+  memberUserId: z.string().min(1)
+});
+
 async function currentUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user) throw new Error("Sign in with Google to continue.");
@@ -30,14 +35,30 @@ async function currentUser() {
   return user;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!isDatabaseConfigured()) return NextResponse.json({ projects: [], warning: "Database is missing. Add Vercel Postgres or Neon storage to this Vercel project." });
   try {
     const user = await currentUser();
+    const selectedProjectId = new URL(request.url).searchParams.get("projectId");
     const [projects, invites] = await Promise.all([listProjects(user.id), listPendingInvites(user.id)]);
-    return NextResponse.json({ projects, invites, user });
+    const activeProjectId = selectedProjectId && projects.some((project) => project.id === selectedProjectId) ? selectedProjectId : projects[0]?.id;
+    const members = activeProjectId ? await listProjectMembers(activeProjectId, user.id) : [];
+    return NextResponse.json({ projects, invites, members, user });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Request failed" }, { status: 401 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!isDatabaseConfigured()) return NextResponse.json({ error: "Database is missing. Add Vercel Postgres or Neon storage to this Vercel project." }, { status: 503 });
+  try {
+    const user = await currentUser();
+    const params = new URL(request.url).searchParams;
+    const input = removeMemberSchema.parse({ projectId: params.get("projectId"), memberUserId: params.get("memberUserId") });
+    await removeProjectMember(input.projectId, input.memberUserId, user.id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Request failed" }, { status: 400 });
   }
 }
 

@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import type { AppUser, Category, Expense, Project, ProjectInvite } from "@/types/domain";
+import type { AppUser, Category, Expense, Project, ProjectInvite, ProjectMember } from "@/types/domain";
 
 async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -41,8 +41,9 @@ export const api = {
   async deleteCategory(id: string, projectId: string) {
     await request<{ ok: true }>(`/api/categories?id=${encodeURIComponent(id)}&projectId=${encodeURIComponent(projectId)}`, { method: "DELETE" });
   },
-  async listProjects() {
-    return request<{ projects: Project[]; invites: ProjectInvite[]; user: AppUser; warning?: string }>("/api/projects");
+  async listProjects(projectId?: string) {
+    const suffix = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    return request<{ projects: Project[]; invites: ProjectInvite[]; members: ProjectMember[]; user: AppUser; warning?: string }>(`/api/projects${suffix}`);
   },
   async createProject(project: Pick<Project, "name"> & Partial<Pick<Project, "description" | "color" | "icon">>) {
     const data = await request<{ project: Project }>("/api/projects", { method: "POST", body: JSON.stringify(project) });
@@ -53,6 +54,9 @@ export const api = {
   },
   async respondToInvite(input: { inviteId: string; accept: boolean }) {
     await request<{ ok: true }>("/api/projects", { method: "POST", body: JSON.stringify(input) });
+  },
+  async removeProjectMember(input: { projectId: string; memberUserId: string }) {
+    await request<{ ok: true }>(`/api/projects?projectId=${encodeURIComponent(input.projectId)}&memberUserId=${encodeURIComponent(input.memberUserId)}`, { method: "DELETE" });
   }
 };
 

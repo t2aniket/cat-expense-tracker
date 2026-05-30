@@ -63,6 +63,16 @@ export type ProjectInvite = {
   createdAt: string;
 };
 
+export type ProjectMember = {
+  projectId: string;
+  userId: string;
+  name: string;
+  email: string;
+  image: string;
+  role: Project["role"];
+  joinedAt: string;
+};
+
 export type SortMode = "latest" | "oldest" | "highest" | "lowest";
 
 export type DateRange = {

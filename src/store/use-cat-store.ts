@@ -5,13 +5,14 @@ import { persist } from "zustand/middleware";
 import { DEFAULT_CATEGORIES } from "@/constants/categories";
 import { api } from "@/services/api-client";
 import { cache, defaultPreferences } from "@/services/client-storage";
-import type { AppUser, Category, Expense, Project, ProjectInvite, SortMode, UserPreferences } from "@/types/domain";
+import type { AppUser, Category, Expense, Project, ProjectInvite, ProjectMember, SortMode, UserPreferences } from "@/types/domain";
 
 type State = {
   expenses: Expense[];
   categories: Category[];
   projects: Project[];
   invites: ProjectInvite[];
+  members: ProjectMember[];
   currentUser: AppUser | null;
   selectedProjectId: string;
   preferences: UserPreferences;
@@ -23,6 +24,7 @@ type State = {
   selectProject: (projectId: string) => void;
   createProject: (project: Pick<Project, "name"> & Partial<Pick<Project, "description" | "color" | "icon">>) => Promise<void>;
   addProjectMember: (email: string, role: Project["role"]) => Promise<void>;
+  removeProjectMember: (memberUserId: string) => Promise<void>;
   respondToInvite: (inviteId: string, accept: boolean) => Promise<void>;
   addExpense: (expense: Omit<Expense, "id" | "createdAt" | "updatedAt" | "projectId" | "paidByUserId" | "paidByName"> & Partial<Pick<Expense, "paidByUserId">>) => Promise<Expense>;
   updateExpense: (expense: Expense) => Promise<Expense>;
@@ -53,6 +55,7 @@ export const useCatStore = create<State>()(
       categories: DEFAULT_CATEGORIES,
       projects: [],
       invites: [],
+      members: [],
       currentUser: null,
       selectedProjectId: "",
       preferences: defaultPreferences,
@@ -67,14 +70,14 @@ export const useCatStore = create<State>()(
         if (get().isSyncing && get().isReady) return;
         set({ isSyncing: true });
         try {
-          const projectPayload = await api.listProjects();
+          const projectPayload = await api.listProjects(get().selectedProjectId);
           const projects = projectPayload.projects;
           const selectedProjectId = get().selectedProjectId && projects.some((project) => project.id === get().selectedProjectId) ? get().selectedProjectId : projects[0]?.id || "";
           const [expenses, categories] = selectedProjectId ? await Promise.all([api.listProjectExpenses(selectedProjectId), api.listCategories(selectedProjectId)]) : [[], DEFAULT_CATEGORIES];
           cache.setExpenses(expenses);
           cache.setCategories(categories);
           cache.setProjects(projects);
-          set({ expenses: sortExpenses(expenses), categories, projects, invites: projectPayload.invites, currentUser: projectPayload.user, selectedProjectId, isReady: true, isSyncing: false, error: null });
+          set({ expenses: sortExpenses(expenses), categories, projects, invites: projectPayload.invites, members: projectPayload.members, currentUser: projectPayload.user, selectedProjectId, isReady: true, isSyncing: false, error: null });
         } catch (error) {
           set({ isReady: true, isSyncing: false, error: error instanceof Error ? error.message : "Offline cache is active." });
         }
@@ -96,6 +99,12 @@ export const useCatStore = create<State>()(
       },
       async respondToInvite(inviteId, accept) {
         await api.respondToInvite({ inviteId, accept });
+        await get().sync();
+      },
+      async removeProjectMember(memberUserId) {
+        const projectId = get().selectedProjectId;
+        if (!projectId) throw new Error("Select a project first.");
+        await api.removeProjectMember({ projectId, memberUserId });
         await get().sync();
       },
       async addExpense(input) {
@@ -211,7 +220,7 @@ export const useCatStore = create<State>()(
         for (const expense of expenses) await get().updateExpense(expense);
       },
       resetAll() {
-        set({ expenses: [], categories: DEFAULT_CATEGORIES, projects: [], invites: [], selectedProjectId: "", preferences: defaultPreferences });
+        set({ expenses: [], categories: DEFAULT_CATEGORIES, projects: [], invites: [], members: [], selectedProjectId: "", preferences: defaultPreferences });
         cache.setExpenses([]);
         cache.setCategories(DEFAULT_CATEGORIES);
         cache.setPreferences(defaultPreferences);

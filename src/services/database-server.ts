@@ -1,7 +1,7 @@
 import "server-only";
 import postgres from "postgres";
 import { DEFAULT_CATEGORIES } from "@/constants/categories";
-import type { AppUser, Category, Expense, Project, ProjectInvite, UserPreferences } from "@/types/domain";
+import type { AppUser, Category, Expense, Project, ProjectInvite, ProjectMember, UserPreferences } from "@/types/domain";
 
 type ExpenseRow = {
   id: string;
@@ -50,6 +50,16 @@ type InviteRow = {
   status: ProjectInvite["status"];
   invited_by_name: string;
   created_at: string | Date;
+};
+
+type MemberRow = {
+  project_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  image: string;
+  role: Project["role"];
+  joined_at: string | Date;
 };
 
 type PreferenceRow = {
@@ -143,6 +153,18 @@ function mapInvite(row: InviteRow): ProjectInvite {
     status: row.status,
     invitedByName: row.invited_by_name,
     createdAt: iso(row.created_at)
+  };
+}
+
+function mapMember(row: MemberRow): ProjectMember {
+  return {
+    projectId: row.project_id,
+    userId: row.user_id,
+    name: row.name,
+    email: row.email,
+    image: row.image,
+    role: row.role,
+    joinedAt: iso(row.joined_at)
   };
 }
 
@@ -362,6 +384,29 @@ export async function listPendingInvites(userId: string) {
     order by i.created_at desc
   `;
   return rows.map(mapInvite);
+}
+
+export async function listProjectMembers(projectId: string, userId: string) {
+  await assertProjectAccess(projectId, userId);
+  const rows = await sql()<MemberRow[]>`
+    select pm.project_id, pm.user_id, u.name, u.email, u.image, pm.role, pm.joined_at
+    from project_members pm
+    join app_users u on u.id = pm.user_id
+    where pm.project_id = ${projectId}
+    order by case pm.role when 'owner' then 1 when 'admin' then 2 when 'member' then 3 else 4 end, u.name
+  `;
+  return rows.map(mapMember);
+}
+
+export async function removeProjectMember(projectId: string, memberUserId: string, actorUserId: string) {
+  const actorRole = await assertProjectAccess(projectId, actorUserId, true);
+  if (!["owner", "admin"].includes(actorRole)) throw new Error("Only owners and admins can remove members.");
+  if (memberUserId === actorUserId) throw new Error("You cannot remove yourself from the project here.");
+  const rows = await sql()<[{ role: Project["role"] }]>`select role from project_members where project_id = ${projectId} and user_id = ${memberUserId}`;
+  const targetRole = rows[0]?.role;
+  if (!targetRole) return;
+  if (targetRole === "owner" && actorRole !== "owner") throw new Error("Only owners can remove another owner.");
+  await sql()`delete from project_members where project_id = ${projectId} and user_id = ${memberUserId}`;
 }
 
 export async function respondToProjectInvite(inviteId: string, accept: boolean, userId: string) {
