@@ -47,8 +47,20 @@ export type Project = {
   color: string;
   icon: string;
   role: "owner" | "admin" | "member" | "viewer";
+  memberCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ProjectInvite = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  email: string;
+  role: Project["role"];
+  status: "pending" | "accepted" | "declined";
+  invitedByName: string;
+  createdAt: string;
 };
 
 export type SortMode = "latest" | "oldest" | "highest" | "lowest";

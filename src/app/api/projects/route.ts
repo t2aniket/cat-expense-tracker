@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
-import { addProjectMember, createProject, isDatabaseConfigured, listProjects, sessionToUser, upsertUser } from "@/services/database-server";
+import { createProject, createProjectInvite, isDatabaseConfigured, listPendingInvites, listProjects, respondToProjectInvite, sessionToUser, upsertUser } from "@/services/database-server";
 
 const projectSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -17,6 +17,11 @@ const memberSchema = z.object({
   role: z.enum(["owner", "admin", "member", "viewer"]).default("member")
 });
 
+const inviteResponseSchema = z.object({
+  inviteId: z.string().min(1),
+  accept: z.boolean()
+});
+
 async function currentUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user) throw new Error("Sign in with Google to continue.");
@@ -29,7 +34,8 @@ export async function GET() {
   if (!isDatabaseConfigured()) return NextResponse.json({ projects: [], warning: "Database is missing. Add Vercel Postgres or Neon storage to this Vercel project." });
   try {
     const user = await currentUser();
-    return NextResponse.json({ projects: await listProjects(user.id), user });
+    const [projects, invites] = await Promise.all([listProjects(user.id), listPendingInvites(user.id)]);
+    return NextResponse.json({ projects, invites, user });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Request failed" }, { status: 401 });
   }
@@ -40,9 +46,14 @@ export async function POST(request: Request) {
   try {
     const user = await currentUser();
     const body = await request.json();
+    if (body.inviteId) {
+      const input = inviteResponseSchema.parse(body);
+      await respondToProjectInvite(input.inviteId, input.accept, user.id);
+      return NextResponse.json({ ok: true });
+    }
     if (body.email) {
       const input = memberSchema.parse(body);
-      await addProjectMember(input.projectId, input.email, input.role, user.id);
+      await createProjectInvite(input.projectId, input.email, input.role, user.id);
       return NextResponse.json({ ok: true });
     }
     const input = projectSchema.parse(body);

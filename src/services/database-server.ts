@@ -1,7 +1,7 @@
 import "server-only";
 import postgres from "postgres";
 import { DEFAULT_CATEGORIES } from "@/constants/categories";
-import type { AppUser, Category, Expense, Project, UserPreferences } from "@/types/domain";
+import type { AppUser, Category, Expense, Project, ProjectInvite, UserPreferences } from "@/types/domain";
 
 type ExpenseRow = {
   id: string;
@@ -36,8 +36,20 @@ type ProjectRow = {
   color: string;
   icon: string;
   role: Project["role"];
+  member_count: string | number;
   created_at: string | Date;
   updated_at: string | Date;
+};
+
+type InviteRow = {
+  id: string;
+  project_id: string;
+  project_name: string;
+  email: string;
+  role: Project["role"];
+  status: ProjectInvite["status"];
+  invited_by_name: string;
+  created_at: string | Date;
 };
 
 type PreferenceRow = {
@@ -115,8 +127,22 @@ function mapProject(row: ProjectRow): Project {
     color: row.color,
     icon: row.icon,
     role: row.role,
+    memberCount: Number(row.member_count || 0),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at)
+  };
+}
+
+function mapInvite(row: InviteRow): ProjectInvite {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    invitedByName: row.invited_by_name,
+    createdAt: iso(row.created_at)
   };
 }
 
@@ -152,6 +178,19 @@ async function ensureSchema() {
       role text not null check (role in ('owner', 'admin', 'member', 'viewer')),
       joined_at timestamptz not null default now(),
       primary key (project_id, user_id)
+    )
+  `;
+  await db`
+    create table if not exists project_invites (
+      id uuid primary key,
+      project_id text not null references projects(id) on delete cascade,
+      email text not null,
+      role text not null check (role in ('owner', 'admin', 'member', 'viewer')),
+      status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+      invited_by_user_id text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique(project_id, email)
     )
   `;
   await db`
@@ -208,6 +247,18 @@ async function ensureSchema() {
   await db`create index if not exists expenses_project_category_idx on expenses(project_id, category)`;
   await db`create index if not exists categories_project_name_idx on categories(project_id, name)`;
   await db`create index if not exists project_members_user_idx on project_members(user_id)`;
+  await db`create index if not exists project_invites_email_idx on project_invites(email, status)`;
+  await db`
+    delete from project_members
+    where project_id = ${defaultProjectId}
+      and role = 'viewer'
+      and not exists (
+        select 1 from project_invites
+        where project_invites.project_id = project_members.project_id
+          and project_invites.email = project_members.user_id
+          and project_invites.status = 'accepted'
+      )
+  `;
 }
 
 async function ready() {
@@ -226,7 +277,7 @@ export async function upsertUser(user: AppUser) {
     values (${user.id}, ${user.email.toLowerCase()}, ${user.name}, ${user.image}, ${new Date().toISOString()})
     on conflict (id) do update set email = excluded.email, name = excluded.name, image = excluded.image, updated_at = excluded.updated_at
   `;
-  await ensureDefaultMembership(user.id);
+  await ensureDefaultOwner(user.id);
 }
 
 export function sessionToUser(sessionUser: { email?: string | null; name?: string | null; image?: string | null }): AppUser {
@@ -239,14 +290,15 @@ export function sessionToUser(sessionUser: { email?: string | null; name?: strin
   };
 }
 
-async function ensureDefaultMembership(userId: string) {
+async function ensureDefaultOwner(userId: string) {
   const existing = await sql()<[{ count: string }]>`select count(*)::text from project_members where project_id = ${defaultProjectId}`;
-  const role: Project["role"] = Number(existing[0]?.count || 0) === 0 ? "owner" : "viewer";
-  await sql()`
-    insert into project_members (project_id, user_id, role)
-    values (${defaultProjectId}, ${userId}, ${role})
-    on conflict (project_id, user_id) do nothing
-  `;
+  if (Number(existing[0]?.count || 0) === 0) {
+    await sql()`
+      insert into project_members (project_id, user_id, role)
+      values (${defaultProjectId}, ${userId}, 'owner')
+      on conflict (project_id, user_id) do nothing
+    `;
+  }
 }
 
 async function assertProjectAccess(projectId: string, userId: string, write = false) {
@@ -263,10 +315,12 @@ async function assertProjectAccess(projectId: string, userId: string, write = fa
 export async function listProjects(userId: string) {
   await ready();
   const rows = await sql()<ProjectRow[]>`
-    select p.id, p.name, p.description, p.color, p.icon, pm.role, p.created_at, p.updated_at
+    select p.id, p.name, p.description, p.color, p.icon, pm.role, count(all_members.user_id)::text as member_count, p.created_at, p.updated_at
     from projects p
     join project_members pm on pm.project_id = p.id
+    left join project_members all_members on all_members.project_id = p.id
     where p.app_instance_id = ${appInstanceId} and pm.user_id = ${userId}
+    group by p.id, p.name, p.description, p.color, p.icon, pm.role, p.created_at, p.updated_at
     order by p.created_at asc
   `;
   return rows.map(mapProject);
@@ -279,27 +333,50 @@ export async function createProject(input: { name: string; description?: string;
   const rows = await sql()<ProjectRow[]>`
     insert into projects (id, app_instance_id, name, description, color, icon, created_by_user_id, created_at, updated_at)
     values (${id}, ${appInstanceId}, ${input.name}, ${input.description || ''}, ${input.color || '#0f766e'}, ${input.icon || 'Wallet'}, ${userId}, ${now}, ${now})
-    returning id, name, description, color, icon, 'owner'::text as role, created_at, updated_at
+    returning id, name, description, color, icon, 'owner'::text as role, 1::text as member_count, created_at, updated_at
   `;
   await sql()`insert into project_members (project_id, user_id, role) values (${id}, ${userId}, 'owner')`;
   await seedDefaultCategories(id);
   return mapProject(rows[0]);
 }
 
-export async function addProjectMember(projectId: string, email: string, role: Project["role"], actorUserId: string) {
+export async function createProjectInvite(projectId: string, email: string, role: Project["role"], actorUserId: string) {
   const actorRole = await assertProjectAccess(projectId, actorUserId, true);
   if (!["owner", "admin"].includes(actorRole)) throw new Error("Only owners and admins can add members.");
-  const id = userIdFromEmail(email);
+  const normalized = userIdFromEmail(email);
   await sql()`
-    insert into app_users (id, email, name, image)
-    values (${id}, ${id}, ${id}, '')
-    on conflict (id) do nothing
+    insert into project_invites (id, project_id, email, role, status, invited_by_user_id, updated_at)
+    values (${crypto.randomUUID()}, ${projectId}, ${normalized}, ${role}, 'pending', ${actorUserId}, ${new Date().toISOString()})
+    on conflict (project_id, email) do update set role = excluded.role, status = 'pending', invited_by_user_id = excluded.invited_by_user_id, updated_at = excluded.updated_at
   `;
-  await sql()`
-    insert into project_members (project_id, user_id, role)
-    values (${projectId}, ${id}, ${role})
-    on conflict (project_id, user_id) do update set role = excluded.role
+}
+
+export async function listPendingInvites(userId: string) {
+  await ready();
+  const rows = await sql()<InviteRow[]>`
+    select i.id, i.project_id, p.name as project_name, i.email, i.role, i.status, coalesce(u.name, i.invited_by_user_id) as invited_by_name, i.created_at
+    from project_invites i
+    join projects p on p.id = i.project_id
+    left join app_users u on u.id = i.invited_by_user_id
+    where i.email = ${userId} and i.status = 'pending'
+    order by i.created_at desc
   `;
+  return rows.map(mapInvite);
+}
+
+export async function respondToProjectInvite(inviteId: string, accept: boolean, userId: string) {
+  await ready();
+  const rows = await sql()<[{ project_id: string; role: Project["role"]; email: string; status: string }]>`
+    select project_id, role, email, status from project_invites where id = ${inviteId}
+  `;
+  const invite = rows[0];
+  if (!invite || invite.email !== userId || invite.status !== "pending") throw new Error("Invite is not available.");
+  if (accept) {
+    await sql()`insert into project_members (project_id, user_id, role) values (${invite.project_id}, ${userId}, ${invite.role}) on conflict (project_id, user_id) do update set role = excluded.role`;
+    await sql()`update project_invites set status = 'accepted', updated_at = ${new Date().toISOString()} where id = ${inviteId}`;
+  } else {
+    await sql()`update project_invites set status = 'declined', updated_at = ${new Date().toISOString()} where id = ${inviteId}`;
+  }
 }
 
 export async function listExpenses(projectId: string, userId: string) {

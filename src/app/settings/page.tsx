@@ -1,6 +1,6 @@
 "use client";
 
-import { Upload, Download, RotateCcw, Trash2 } from "lucide-react";
+import { Download, RotateCcw, Trash2, Upload } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { CATEGORY_COLORS } from "@/constants/categories";
-import { expensesToCsv, parseExpenseCsv } from "@/services/api-client";
 import { downloadFile } from "@/lib/utils";
+import { expensesToCsv, parseExpenseCsv } from "@/services/api-client";
 import { useCatStore } from "@/store/use-cat-store";
 
 export default function SettingsPage() {
@@ -20,9 +20,11 @@ export default function SettingsPage() {
   const addCategory = useCatStore((state) => state.addCategory);
   const removeCategory = useCatStore((state) => state.removeCategory);
   const projects = useCatStore((state) => state.projects);
+  const invites = useCatStore((state) => state.invites);
   const selectedProjectId = useCatStore((state) => state.selectedProjectId);
   const createProject = useCatStore((state) => state.createProject);
   const addProjectMember = useCatStore((state) => state.addProjectMember);
+  const respondToInvite = useCatStore((state) => state.respondToInvite);
   const importExpenses = useCatStore((state) => state.importExpenses);
   const resetAll = useCatStore((state) => state.resetAll);
   const [categoryName, setCategoryName] = useState("");
@@ -53,7 +55,7 @@ export default function SettingsPage() {
     try {
       await addCategory({ name: categoryName.trim(), color: categoryColor, icon: "Tag", isFavorite: false });
       setCategoryName("");
-      toast.success("Category saved to shared database");
+      toast.success("Category saved");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save category");
     }
@@ -75,9 +77,9 @@ export default function SettingsPage() {
     try {
       await addProjectMember(memberEmail.trim(), "member");
       setMemberEmail("");
-      toast.success("Member access added");
+      toast.success("Invite sent");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not add member");
+      toast.error(error instanceof Error ? error.message : "Could not invite member");
     }
   }
 
@@ -85,7 +87,7 @@ export default function SettingsPage() {
     <div className="grid gap-5">
       <header className="pr-12">
         <h1 className="text-4xl font-bold tracking-normal">Settings</h1>
-        <p className="mt-2 text-[var(--muted)]">Theme, budget, categories, backup, restore, and data tools.</p>
+        <p className="mt-2 text-[var(--muted)]">Theme, projects, invites, categories, backup, and data tools.</p>
       </header>
 
       <Card className="grid gap-4">
@@ -100,18 +102,36 @@ export default function SettingsPage() {
 
       <Card className="grid gap-4">
         <h2 className="text-xl font-bold">Projects</h2>
+        {projects.length === 0 && <p className="text-sm text-[var(--muted)]">No projects yet. Create one or accept an invite below.</p>}
         <Field label="New Project" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Cat Food Tracker" />
         <Button type="button" onClick={onCreateProject}>Create Project</Button>
+
+        {invites.length > 0 && (
+          <div className="grid gap-2">
+            <h3 className="font-bold">Pending Invites</h3>
+            {invites.map((invite) => (
+              <div key={invite.id} className="grid gap-2 rounded-2xl bg-teal-500/10 p-3 text-sm">
+                <p className="font-bold">{invite.projectName}</p>
+                <p className="text-[var(--muted)]">Invited by {invite.invitedByName} as {invite.role}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" size="sm" onClick={() => void respondToInvite(invite.id, true).then(() => toast.success("Invite accepted")).catch((error) => toast.error(error instanceof Error ? error.message : "Could not accept invite"))}>Accept</Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void respondToInvite(invite.id, false).then(() => toast.success("Invite declined")).catch((error) => toast.error(error instanceof Error ? error.message : "Could not decline invite"))}>Decline</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="grid gap-2">
           {projects.map((project) => (
             <div key={project.id} className="rounded-2xl bg-black/5 px-3 py-3 text-sm dark:bg-white/10">
               <p className="font-bold">{project.name}</p>
-              <p className="text-[var(--muted)]">{project.role}{project.id === selectedProjectId ? " · selected" : ""}</p>
+              <p className="text-[var(--muted)]">{project.role} · {project.memberCount} people{project.id === selectedProjectId ? " · selected" : ""}</p>
             </div>
           ))}
         </div>
-        <Field label="Add Member Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="friend@gmail.com" />
-        <Button type="button" variant="secondary" onClick={onInviteMember}>Add Member To Selected Project</Button>
+        <Field label="Invite Member Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="friend@gmail.com" />
+        <Button type="button" variant="secondary" onClick={onInviteMember}>Send Invite To Selected Project</Button>
       </Card>
 
       <Card className="grid gap-4">
@@ -128,14 +148,7 @@ export default function SettingsPage() {
           {categories.map((category) => (
             <div key={category.id} className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-black/5 px-3 dark:bg-white/10">
               <span className="flex items-center gap-2 font-semibold"><span className="h-3 w-3 rounded-full" style={{ background: category.color }} />{category.name}</span>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                disabled={category.isDefault}
-                onClick={() => void removeCategory(category.id).catch((error) => toast.error(error instanceof Error ? error.message : "Could not delete category"))}
-                aria-label={`Delete ${category.name}`}
-              >
+              <Button type="button" size="icon" variant="ghost" disabled={category.isDefault} onClick={() => void removeCategory(category.id).catch((error) => toast.error(error instanceof Error ? error.message : "Could not delete category"))} aria-label={`Delete ${category.name}`}>
                 <Trash2 size={17} />
               </Button>
             </div>
@@ -154,7 +167,7 @@ export default function SettingsPage() {
           Import / Restore
           <input type="file" accept=".csv,.json,application/json,text/csv" className="sr-only" onChange={importFile} />
         </label>
-        <Button type="button" variant="danger" onClick={() => { if (window.confirm("Reset local cached data and preferences? Supabase rows are not deleted.")) resetAll(); }}>
+        <Button type="button" variant="danger" onClick={() => { if (window.confirm("Reset local cached data and preferences? Database rows are not deleted.")) resetAll(); }}>
           <RotateCcw size={18} />
           Reset Local Data
         </Button>

@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const expenses = useCatStore((state) => state.expenses);
   const categories = useCatStore((state) => state.categories);
   const preferences = useCatStore((state) => state.preferences);
+  const selectedProjectId = useCatStore((state) => state.selectedProjectId);
   const error = useCatStore((state) => state.error);
   const metrics = getDashboardMetrics(expenses);
   const insights = getInsights(expenses, categories);
@@ -26,6 +27,8 @@ export default function DashboardPage() {
         <h1 className="mt-2 text-4xl font-bold tracking-normal">{currency(metrics.month)}</h1>
         <p className="mt-1 text-[var(--muted)]">spent this month across {metrics.count} expenses</p>
       </header>
+
+      {!selectedProjectId && <Card className="text-center text-[var(--muted)]">Create a project or accept an invite in Settings to start tracking shared expenses.</Card>}
 
       {error && <div className="rounded-2xl bg-amber-500/15 p-3 text-sm font-medium text-amber-800 dark:text-amber-200">{error}</div>}
 

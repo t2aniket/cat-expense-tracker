@@ -26,6 +26,7 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   const sync = useCatStore((state) => state.sync);
   const theme = useCatStore((state) => state.preferences.theme);
   const projects = useCatStore((state) => state.projects);
+  const invites = useCatStore((state) => state.invites);
   const selectedProjectId = useCatStore((state) => state.selectedProjectId);
   const selectProject = useCatStore((state) => state.selectProject);
   const authReady = status !== "loading";
@@ -82,7 +83,14 @@ function ShellContent({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
           )}
-          {children}
+          {status === "authenticated" && projects.length === 0 && invites.length === 0 ? (
+            <div className="grid min-h-[60dvh] content-center gap-4">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--accent)]">No Projects</p>
+              <h1 className="text-4xl font-bold tracking-normal">Create a project</h1>
+              <p className="text-[var(--muted)]">You do not have access to any project yet. Create one in Settings or ask an owner to invite your Google email.</p>
+              <Link href="/settings"><Button size="lg" className="w-full">Open Settings</Button></Link>
+            </div>
+          ) : children}
         </main>
         <nav className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-3xl px-3 safe-bottom">
           <div className="glass grid grid-cols-5 gap-1 rounded-[2rem] p-2 shadow-2xl shadow-black/15">

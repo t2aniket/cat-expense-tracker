@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import type { AppUser, Category, Expense, Project } from "@/types/domain";
+import type { AppUser, Category, Expense, Project, ProjectInvite } from "@/types/domain";
 
 async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -42,13 +42,16 @@ export const api = {
     await request<{ ok: true }>(`/api/categories?id=${encodeURIComponent(id)}&projectId=${encodeURIComponent(projectId)}`, { method: "DELETE" });
   },
   async listProjects() {
-    return request<{ projects: Project[]; user: AppUser; warning?: string }>("/api/projects");
+    return request<{ projects: Project[]; invites: ProjectInvite[]; user: AppUser; warning?: string }>("/api/projects");
   },
   async createProject(project: Pick<Project, "name"> & Partial<Pick<Project, "description" | "color" | "icon">>) {
     const data = await request<{ project: Project }>("/api/projects", { method: "POST", body: JSON.stringify(project) });
     return data.project;
   },
   async addProjectMember(input: { projectId: string; email: string; role: Project["role"] }) {
+    await request<{ ok: true }>("/api/projects", { method: "POST", body: JSON.stringify(input) });
+  },
+  async respondToInvite(input: { inviteId: string; accept: boolean }) {
     await request<{ ok: true }>("/api/projects", { method: "POST", body: JSON.stringify(input) });
   }
 };

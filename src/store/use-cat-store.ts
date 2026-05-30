@@ -5,12 +5,13 @@ import { persist } from "zustand/middleware";
 import { DEFAULT_CATEGORIES } from "@/constants/categories";
 import { api } from "@/services/api-client";
 import { cache, defaultPreferences } from "@/services/client-storage";
-import type { AppUser, Category, Expense, Project, SortMode, UserPreferences } from "@/types/domain";
+import type { AppUser, Category, Expense, Project, ProjectInvite, SortMode, UserPreferences } from "@/types/domain";
 
 type State = {
   expenses: Expense[];
   categories: Category[];
   projects: Project[];
+  invites: ProjectInvite[];
   currentUser: AppUser | null;
   selectedProjectId: string;
   preferences: UserPreferences;
@@ -22,6 +23,7 @@ type State = {
   selectProject: (projectId: string) => void;
   createProject: (project: Pick<Project, "name"> & Partial<Pick<Project, "description" | "color" | "icon">>) => Promise<void>;
   addProjectMember: (email: string, role: Project["role"]) => Promise<void>;
+  respondToInvite: (inviteId: string, accept: boolean) => Promise<void>;
   addExpense: (expense: Omit<Expense, "id" | "createdAt" | "updatedAt" | "projectId" | "paidByUserId" | "paidByName"> & Partial<Pick<Expense, "paidByUserId">>) => Promise<Expense>;
   updateExpense: (expense: Expense) => Promise<Expense>;
   removeExpense: (id: string) => Promise<Expense | undefined>;
@@ -50,6 +52,7 @@ export const useCatStore = create<State>()(
       expenses: [],
       categories: DEFAULT_CATEGORIES,
       projects: [],
+      invites: [],
       currentUser: null,
       selectedProjectId: "",
       preferences: defaultPreferences,
@@ -71,7 +74,7 @@ export const useCatStore = create<State>()(
           cache.setExpenses(expenses);
           cache.setCategories(categories);
           cache.setProjects(projects);
-          set({ expenses: sortExpenses(expenses), categories, projects, currentUser: projectPayload.user, selectedProjectId, isReady: true, isSyncing: false, error: null });
+          set({ expenses: sortExpenses(expenses), categories, projects, invites: projectPayload.invites, currentUser: projectPayload.user, selectedProjectId, isReady: true, isSyncing: false, error: null });
         } catch (error) {
           set({ isReady: true, isSyncing: false, error: error instanceof Error ? error.message : "Offline cache is active." });
         }
@@ -89,6 +92,11 @@ export const useCatStore = create<State>()(
         const projectId = get().selectedProjectId;
         if (!projectId) throw new Error("Select a project first.");
         await api.addProjectMember({ projectId, email, role });
+        await get().sync();
+      },
+      async respondToInvite(inviteId, accept) {
+        await api.respondToInvite({ inviteId, accept });
+        await get().sync();
       },
       async addExpense(input) {
         const projectId = get().selectedProjectId;
@@ -203,7 +211,7 @@ export const useCatStore = create<State>()(
         for (const expense of expenses) await get().updateExpense(expense);
       },
       resetAll() {
-        set({ expenses: [], categories: DEFAULT_CATEGORIES, projects: [], selectedProjectId: "", preferences: defaultPreferences });
+        set({ expenses: [], categories: DEFAULT_CATEGORIES, projects: [], invites: [], selectedProjectId: "", preferences: defaultPreferences });
         cache.setExpenses([]);
         cache.setCategories(DEFAULT_CATEGORIES);
         cache.setPreferences(defaultPreferences);
